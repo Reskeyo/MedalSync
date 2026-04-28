@@ -2,7 +2,7 @@ namespace MedalSync;
 
 /// <summary>
 /// Simple settings dialog for configuring source and sync folders.
-/// Dark-themed to match the tray menu aesthetic.
+/// Dark-themed to match the tray menu aesthetic. Fully localized.
 /// </summary>
 public sealed class SettingsDialog : Form
 {
@@ -15,7 +15,7 @@ public sealed class SettingsDialog : Form
         _settings = settings;
 
         // ── Form Setup ──────────────────────────────────────────────────
-        Text = "MedalSync – Einstellungen";
+        Text = Loc.SettingsTitle;
         Size = new Size(520, 280);
         FormBorderStyle = FormBorderStyle.FixedDialog;
         StartPosition = FormStartPosition.CenterScreen;
@@ -28,7 +28,7 @@ public sealed class SettingsDialog : Form
         // ── Title ───────────────────────────────────────────────────────
         var titleLabel = new Label
         {
-            Text = "⚙  Einstellungen",
+            Text = Loc.SettingsHeader,
             Font = new Font("Segoe UI", 14, FontStyle.Bold),
             ForeColor = Color.FromArgb(255, 180, 50),
             Location = new Point(20, 15),
@@ -38,7 +38,7 @@ public sealed class SettingsDialog : Form
         // ── Source Folder ───────────────────────────────────────────────
         var sourceLabel = new Label
         {
-            Text = "NVIDIA Clips-Ordner:",
+            Text = Loc.SettingsSourceLabel,
             Location = new Point(20, 60),
             AutoSize = true
         };
@@ -60,7 +60,7 @@ public sealed class SettingsDialog : Form
         // ── Sync Folder ─────────────────────────────────────────────────
         var syncLabel = new Label
         {
-            Text = "Medal Sync-Ordner:",
+            Text = Loc.SettingsSyncLabel,
             Location = new Point(20, 118),
             AutoSize = true
         };
@@ -82,7 +82,7 @@ public sealed class SettingsDialog : Form
         // ── Buttons ─────────────────────────────────────────────────────
         var saveButton = new Button
         {
-            Text = "Speichern",
+            Text = Loc.SettingsSave,
             Size = new Size(100, 35),
             Location = new Point(285, 190),
             FlatStyle = FlatStyle.Flat,
@@ -97,7 +97,7 @@ public sealed class SettingsDialog : Form
 
         var cancelButton = new Button
         {
-            Text = "Abbrechen",
+            Text = Loc.SettingsCancel,
             Size = new Size(100, 35),
             Location = new Point(395, 190),
             FlatStyle = FlatStyle.Flat,
@@ -129,19 +129,19 @@ public sealed class SettingsDialog : Form
 
         if (string.IsNullOrEmpty(source))
         {
-            ShowError("Bitte gib den NVIDIA Clips-Ordner an.");
+            ShowError(Loc.SettingsErrorNoSource);
             return;
         }
 
         if (string.IsNullOrEmpty(sync))
         {
-            ShowError("Bitte gib den Sync-Ordner an.");
+            ShowError(Loc.SettingsErrorNoSync);
             return;
         }
 
         if (!Directory.Exists(source))
         {
-            ShowError($"Der Clips-Ordner existiert nicht:\n{source}");
+            ShowError(Loc.SettingsErrorSourceNotExist(source));
             return;
         }
 
@@ -149,8 +149,7 @@ public sealed class SettingsDialog : Form
         if (!string.Equals(Path.GetPathRoot(source), Path.GetPathRoot(sync),
             StringComparison.OrdinalIgnoreCase))
         {
-            ShowError("Clips-Ordner und Sync-Ordner müssen auf dem selben Laufwerk liegen!\n\n" +
-                      "(Hardlinks funktionieren nur auf dem gleichen NTFS-Volume)");
+            ShowError(Loc.SettingsErrorDiffDrive);
             return;
         }
 
@@ -164,7 +163,7 @@ public sealed class SettingsDialog : Form
     {
         using var dialog = new FolderBrowserDialog
         {
-            Description = "Ordner auswählen",
+            Description = Loc.SettingsBrowse,
             UseDescriptionForTitle = true,
             SelectedPath = target.Text
         };
@@ -195,7 +194,7 @@ public sealed class SettingsDialog : Form
 
     private static void ShowError(string message)
     {
-        MessageBox.Show(message, "MedalSync – Fehler",
+        MessageBox.Show(message, Loc.SettingsErrorTitle,
             MessageBoxButtons.OK, MessageBoxIcon.Warning);
     }
 }

@@ -13,8 +13,12 @@ static class Program
         using var mutex = new Mutex(true, "MedalSync_SingleInstance", out bool isNew);
         if (!isNew)
         {
+            // Load settings to get language for the error message
+            var settings = Settings.Load();
+            Loc.SetLanguage(settings.Language);
+
             MessageBox.Show(
-                "MedalSync läuft bereits im System Tray!",
+                Loc.AlreadyRunning,
                 "MedalSync",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Information);

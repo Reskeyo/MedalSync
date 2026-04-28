@@ -40,6 +40,11 @@ public sealed class Settings
     /// </summary>
     public bool AutoStart { get; set; } = false;
 
+    /// <summary>
+    /// UI language: "de" (Deutsch) or "en" (English).
+    /// </summary>
+    public string Language { get; set; } = "de";
+
     // ── Persistence ─────────────────────────────────────────────────────
 
     public static Settings Load()

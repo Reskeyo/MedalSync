@@ -1,19 +1,25 @@
-using Microsoft.Win32;
+﻿using Microsoft.Win32;
 
 namespace MedalSync;
 
 /// <summary>
-/// System tray application — no visible window, only a tray icon with context menu.
+/// System tray application â€” no visible window, only a tray icon with context menu.
+/// Supports German and English localization with dynamic menu rebuilding.
 /// </summary>
 public sealed class TrayApplication : ApplicationContext
 {
     private readonly NotifyIcon _trayIcon;
     private readonly SyncEngine _engine;
     private readonly Settings _settings;
-    private readonly ToolStripMenuItem _pauseItem;
-    private readonly ToolStripMenuItem _autoStartItem;
-    private readonly ToolStripLabel _statusLabel;
-    private readonly ToolStripLabel _countLabel;
+    private ContextMenuStrip _menu = null!;
+
+    // Menu items that need dynamic updates
+    private ToolStripLabel _statusLabel = null!;
+    private ToolStripLabel _countLabel = null!;
+    private ToolStripMenuItem _pauseItem = null!;
+    private ToolStripMenuItem _autoStartItem = null!;
+    private ToolStripMenuItem _langDeItem = null!;
+    private ToolStripMenuItem _langEnItem = null!;
 
     private const string AutoStartRegistryKey = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Run";
     private const string AppName = "MedalSync";
@@ -21,32 +27,91 @@ public sealed class TrayApplication : ApplicationContext
     public TrayApplication()
     {
         _settings = Settings.Load();
+        Loc.SetLanguage(_settings.Language);
+
         _engine = new SyncEngine(_settings);
 
-        // ── Build Context Menu ──────────────────────────────────────────
+        // â”€â”€ Tray Icon â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-        _statusLabel = new ToolStripLabel("Wird gestartet...")
+        _trayIcon = new NotifyIcon
+        {
+            Icon = CreateAppIcon(),
+            Text = Loc.TrayTooltip(Loc.TrayStarting),
+            Visible = true
+        };
+
+        _trayIcon.DoubleClick += OnOpenSyncFolder;
+
+        // â”€â”€ Build Menu & Wire Events â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+        BuildMenu();
+
+        _engine.StatusChanged += status =>
+        {
+            _statusLabel.Text = status;
+            _trayIcon.Text = Loc.TrayTooltip(status);
+        };
+
+        _engine.SyncCountChanged += count =>
+        {
+            _countLabel.Text = Loc.ClipsSynced(count);
+        };
+
+        // â”€â”€ Start engine â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+        _engine.Start();
+    }
+
+    // â”€â”€ Menu Building â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+    /// <summary>
+    /// Builds (or rebuilds) the entire context menu with current language strings.
+    /// </summary>
+    private void BuildMenu()
+    {
+        _menu?.Dispose();
+
+        _statusLabel = new ToolStripLabel(Loc.TrayStarting)
         {
             ForeColor = Color.FromArgb(140, 140, 140),
             Font = new Font("Segoe UI", 8.5f, FontStyle.Italic)
         };
 
-        _countLabel = new ToolStripLabel("0 Clips gesynct")
+        _countLabel = new ToolStripLabel(Loc.ClipsSynced(_engine.SyncedCount))
         {
             ForeColor = Color.FromArgb(100, 180, 255),
             Font = new Font("Segoe UI", 8.5f, FontStyle.Bold)
         };
 
-        _pauseItem = new ToolStripMenuItem("⏸  Pausieren", null, OnPauseResume);
+        _pauseItem = new ToolStripMenuItem(
+            _engine.IsPaused ? Loc.MenuResume : Loc.MenuPause, null, OnPauseResume);
 
-        _autoStartItem = new ToolStripMenuItem("Autostart mit Windows")
+        // Autostart â€” show checked/unchecked state in the label itself
+        _autoStartItem = new ToolStripMenuItem(
+            _settings.AutoStart ? Loc.MenuAutoStartOn : Loc.MenuAutoStartOff,
+            null, OnAutoStartToggle);
+
+        // Language submenu
+        _langDeItem = new ToolStripMenuItem(Loc.LangGerman, null, OnSetGerman)
         {
-            CheckOnClick = true,
-            Checked = _settings.AutoStart
+            Checked = _settings.Language == "de",
+            ForeColor = _settings.Language == "de" ? Color.FromArgb(255, 180, 50) : Color.FromArgb(200, 200, 200)
         };
-        _autoStartItem.CheckedChanged += OnAutoStartChanged;
+        _langEnItem = new ToolStripMenuItem(Loc.LangEnglish, null, OnSetEnglish)
+        {
+            Checked = _settings.Language == "en",
+            ForeColor = _settings.Language == "en" ? Color.FromArgb(255, 180, 50) : Color.FromArgb(200, 200, 200)
+        };
 
-        var menu = new ContextMenuStrip
+        var langMenu = new ToolStripMenuItem(Loc.MenuLanguage);
+        langMenu.DropDownItems.AddRange(new ToolStripItem[] { _langDeItem, _langEnItem });
+
+        // Style the language dropdown
+        langMenu.DropDown.BackColor = Color.FromArgb(30, 30, 30);
+        langMenu.DropDown.ForeColor = Color.White;
+        langMenu.DropDown.Renderer = new DarkMenuRenderer();
+
+        _menu = new ContextMenuStrip
         {
             BackColor = Color.FromArgb(30, 30, 30),
             ForeColor = Color.White,
@@ -55,66 +120,40 @@ public sealed class TrayApplication : ApplicationContext
             Renderer = new DarkMenuRenderer()
         };
 
-        menu.Items.AddRange(new ToolStripItem[]
+        _menu.Items.AddRange(new ToolStripItem[]
         {
             _statusLabel,
             _countLabel,
             new ToolStripSeparator(),
             _pauseItem,
-            new ToolStripMenuItem("🔄  Neu synchronisieren", null, OnResync),
+            new ToolStripMenuItem(Loc.MenuResync, null, OnResync),
             new ToolStripSeparator(),
-            new ToolStripMenuItem("📂  Sync-Ordner öffnen", null, OnOpenSyncFolder),
-            new ToolStripMenuItem("📂  Clips-Ordner öffnen", null, OnOpenSourceFolder),
+            new ToolStripMenuItem(Loc.MenuOpenSync, null, OnOpenSyncFolder),
+            new ToolStripMenuItem(Loc.MenuOpenSource, null, OnOpenSourceFolder),
             new ToolStripSeparator(),
-            new ToolStripMenuItem("⚙  Einstellungen...", null, OnShowSettings),
+            new ToolStripMenuItem(Loc.MenuSettings, null, OnShowSettings),
             _autoStartItem,
+            langMenu,
             new ToolStripSeparator(),
-            new ToolStripMenuItem("❌  Beenden", null, OnExit)
+            new ToolStripMenuItem(Loc.MenuExit, null, OnExit)
         });
 
-        // ── Tray Icon ───────────────────────────────────────────────────
-
-        _trayIcon = new NotifyIcon
-        {
-            Icon = CreateAppIcon(),
-            ContextMenuStrip = menu,
-            Text = "MedalSync – Wird gestartet...",
-            Visible = true
-        };
-
-        _trayIcon.DoubleClick += OnOpenSyncFolder;
-
-        // ── Wire up engine events ───────────────────────────────────────
-
-        _engine.StatusChanged += status =>
-        {
-            _statusLabel.Text = status;
-            _trayIcon.Text = $"MedalSync – {status}";
-        };
-
-        _engine.SyncCountChanged += count =>
-        {
-            _countLabel.Text = $"{count} Clips gesynct";
-        };
-
-        // ── Start engine ────────────────────────────────────────────────
-
-        _engine.Start();
+        _trayIcon.ContextMenuStrip = _menu;
     }
 
-    // ── Event Handlers ──────────────────────────────────────────────────
+    // â”€â”€ Event Handlers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     private void OnPauseResume(object? sender, EventArgs e)
     {
         if (_engine.IsPaused)
         {
             _engine.Resume();
-            _pauseItem.Text = "⏸  Pausieren";
+            _pauseItem.Text = Loc.MenuPause;
         }
         else
         {
             _engine.Pause();
-            _pauseItem.Text = "▶  Fortsetzen";
+            _pauseItem.Text = Loc.MenuResume;
         }
     }
 
@@ -146,11 +185,41 @@ public sealed class TrayApplication : ApplicationContext
         }
     }
 
-    private void OnAutoStartChanged(object? sender, EventArgs e)
+    private void OnAutoStartToggle(object? sender, EventArgs e)
     {
-        _settings.AutoStart = _autoStartItem.Checked;
+        _settings.AutoStart = !_settings.AutoStart;
         _settings.Save();
         SetAutoStart(_settings.AutoStart);
+
+        // Update the label to reflect new state
+        _autoStartItem.Text = _settings.AutoStart
+            ? Loc.MenuAutoStartOn
+            : Loc.MenuAutoStartOff;
+    }
+
+    private void OnSetGerman(object? sender, EventArgs e) => ChangeLanguage("de");
+    private void OnSetEnglish(object? sender, EventArgs e) => ChangeLanguage("en");
+
+    private void ChangeLanguage(string lang)
+    {
+        if (_settings.Language == lang) return;
+
+        _settings.Language = lang;
+        _settings.Save();
+        Loc.SetLanguage(lang);
+
+        // Rebuild entire menu with new language
+        string currentStatus = _statusLabel.Text ?? Loc.StatusActive;
+        int currentCount = _engine.SyncedCount;
+
+        BuildMenu();
+
+        // Restore current state
+        _statusLabel.Text = _engine.IsRunning
+            ? (_engine.IsPaused ? Loc.StatusPaused : Loc.StatusActive)
+            : Loc.StatusStopped;
+        _countLabel.Text = Loc.ClipsSynced(currentCount);
+        _trayIcon.Text = Loc.TrayTooltip(_statusLabel.Text);
     }
 
     private void OnExit(object? sender, EventArgs e)
@@ -162,7 +231,7 @@ public sealed class TrayApplication : ApplicationContext
         Application.Exit();
     }
 
-    // ── Auto-Start Management ───────────────────────────────────────────
+    // â”€â”€ Auto-Start Management â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     private static void SetAutoStart(bool enable)
     {
@@ -183,15 +252,15 @@ public sealed class TrayApplication : ApplicationContext
         }
         catch
         {
-            // Registry access might fail — silently ignore
+            // Registry access might fail â€” silently ignore
         }
     }
 
-    // ── Icon Generation ─────────────────────────────────────────────────
+    // â”€â”€ Icon Generation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     /// <summary>
     /// Creates a simple sync-style icon programmatically.
-    /// Two curved arrows forming a circle with an "M" in the center.
+    /// Gold circle with "M" in the center.
     /// </summary>
     private static Icon CreateAppIcon()
     {
@@ -210,7 +279,7 @@ public sealed class TrayApplication : ApplicationContext
         g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
         g.Clear(Color.Transparent);
 
-        // Background circle — Medal-ish gold/amber gradient
+        // Background circle â€” Medal-ish gold/amber gradient
         using var bgBrush = new System.Drawing.Drawing2D.LinearGradientBrush(
             new Rectangle(0, 0, 32, 32),
             Color.FromArgb(255, 180, 50),   // Gold
@@ -222,7 +291,7 @@ public sealed class TrayApplication : ApplicationContext
         using var textBrush = new SolidBrush(Color.White);
         using var font = new Font("Segoe UI", 16, FontStyle.Bold, GraphicsUnit.Pixel);
         var textSize = g.MeasureString("M", font);
-        g.DrawString("M", font,  textBrush,
+        g.DrawString("M", font, textBrush,
             (32 - textSize.Width) / 2,
             (32 - textSize.Height) / 2);
 
@@ -236,7 +305,7 @@ public sealed class TrayApplication : ApplicationContext
     }
 }
 
-// ── Dark Theme Menu Renderer ────────────────────────────────────────────
+// â”€â”€ Dark Theme Menu Renderer â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /// <summary>
 /// Custom renderer for a dark-themed context menu matching modern Windows aesthetics.
@@ -270,6 +339,28 @@ internal sealed class DarkMenuRenderer : ToolStripProfessionalRenderer
         int y = e.Item.Height / 2;
         e.Graphics.DrawLine(pen, 0, y, e.Item.Width, y);
     }
+
+    protected override void OnRenderArrow(ToolStripArrowRenderEventArgs e)
+    {
+        e.ArrowColor = Color.FromArgb(180, 180, 180);
+        base.OnRenderArrow(e);
+    }
+
+    protected override void OnRenderItemCheck(ToolStripItemImageRenderEventArgs e)
+    {
+        // Draw a custom gold checkmark for checked language items
+        using var pen = new Pen(Color.FromArgb(255, 180, 50), 2f);
+        var rect = e.ImageRectangle;
+        int x = rect.X + 4;
+        int y = rect.Y + rect.Height / 2;
+        e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+        e.Graphics.DrawLines(pen, new Point[]
+        {
+            new(x, y),
+            new(x + 4, y + 4),
+            new(x + 10, y - 4)
+        });
+    }
 }
 
 internal sealed class DarkColorTable : ProfessionalColorTable
@@ -285,4 +376,7 @@ internal sealed class DarkColorTable : ProfessionalColorTable
     public override Color ImageMarginGradientEnd => Color.FromArgb(30, 30, 30);
     public override Color SeparatorDark => Color.FromArgb(55, 55, 60);
     public override Color SeparatorLight => Color.FromArgb(55, 55, 60);
+    public override Color CheckBackground => Color.FromArgb(50, 50, 55);
+    public override Color CheckSelectedBackground => Color.FromArgb(60, 60, 65);
+    public override Color CheckPressedBackground => Color.FromArgb(60, 60, 65);
 }

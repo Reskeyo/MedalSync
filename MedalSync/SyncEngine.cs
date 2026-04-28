@@ -43,7 +43,7 @@ public sealed class SyncEngine : IDisposable
         // Ensure source folder exists
         if (!Directory.Exists(_settings.SourceFolder))
         {
-            RaiseStatus($"Quellordner nicht gefunden: {_settings.SourceFolder}");
+            RaiseStatus(Loc.StatusSourceNotFound(_settings.SourceFolder));
             return;
         }
 
@@ -56,14 +56,14 @@ public sealed class SyncEngine : IDisposable
         // Start watching for new files
         SetupWatcher();
 
-        RaiseStatus("Aktiv – überwacht Clips...");
+        RaiseStatus(Loc.StatusActive);
     }
 
     public void Stop()
     {
         _watcher?.Dispose();
         _watcher = null;
-        RaiseStatus("Gestoppt");
+        RaiseStatus(Loc.StatusStopped);
     }
 
     public void Pause()
@@ -72,7 +72,7 @@ public sealed class SyncEngine : IDisposable
         {
             _watcher.EnableRaisingEvents = false;
             _isPaused = true;
-            RaiseStatus("Pausiert");
+            RaiseStatus(Loc.StatusPaused);
         }
     }
 
@@ -82,7 +82,7 @@ public sealed class SyncEngine : IDisposable
         {
             _watcher.EnableRaisingEvents = true;
             _isPaused = false;
-            RaiseStatus("Aktiv – überwacht Clips...");
+            RaiseStatus(Loc.StatusActive);
         }
     }
 
@@ -93,7 +93,7 @@ public sealed class SyncEngine : IDisposable
     public void Resync()
     {
         InitialSync();
-        RaiseStatus("Aktiv – überwacht Clips...");
+        RaiseStatus(Loc.StatusActive);
     }
 
     public void Dispose()
@@ -105,7 +105,7 @@ public sealed class SyncEngine : IDisposable
 
     private void InitialSync()
     {
-        RaiseStatus("Synchronisiere bestehende Clips...");
+        RaiseStatus(Loc.StatusSyncing);
 
         int created = 0;
         int skipped = 0;
@@ -119,11 +119,7 @@ public sealed class SyncEngine : IDisposable
             foreach (string file in Directory.EnumerateFiles(
                 _settings.SourceFolder, $"*{ext}", SearchOption.AllDirectories))
             {
-                // Skip files directly in the source folder root (no game subfolder)
-                // Also skip files in the sync folder itself if it's a subdirectory
-                string? relDir = Path.GetDirectoryName(
-                    Path.GetRelativePath(_settings.SourceFolder, file));
-
+                // Skip files in the sync folder itself if it's a subdirectory
                 string linkName = GetSyncFileName(file);
                 string linkPath = Path.Combine(_settings.SyncFolder, linkName);
                 sourceClips.Add(linkName);
@@ -137,11 +133,11 @@ public sealed class SyncEngine : IDisposable
                 if (NativeHelper.TryCreateHardLink(linkPath, file, out string? error))
                 {
                     created++;
-                    Log($"Link erstellt: {linkName}");
+                    Log(Loc.LogLinkCreated(linkName));
                 }
                 else
                 {
-                    Log($"Fehler bei {linkName}: {error}");
+                    Log(Loc.LogLinkError(linkName, error));
                 }
             }
         }
@@ -158,7 +154,7 @@ public sealed class SyncEngine : IDisposable
                     {
                         File.Delete(linkFile);
                         cleaned++;
-                        Log($"Verwaisten Link entfernt: {fileName}");
+                        Log(Loc.LogOrphanRemoved(fileName));
                     }
                     catch { /* best effort */ }
                 }
@@ -168,7 +164,7 @@ public sealed class SyncEngine : IDisposable
         _syncedCount = sourceClips.Count;
         RaiseSyncCount(_syncedCount);
 
-        Log($"Initial-Sync abgeschlossen: {created} erstellt, {skipped} übersprungen, {cleaned} aufgeräumt");
+        Log(Loc.LogSyncComplete(created, skipped, cleaned));
     }
 
     // ── FileSystemWatcher ───────────────────────────────────────────────
@@ -224,11 +220,11 @@ public sealed class SyncEngine : IDisposable
                     File.Delete(linkPath);
                     _syncedCount = Math.Max(0, _syncedCount - 1);
                     RaiseSyncCount(_syncedCount);
-                    Log($"Link entfernt: {linkName}");
+                    Log(Loc.LogLinkRemoved(linkName));
                 }
                 catch (Exception ex)
                 {
-                    Log($"Fehler beim Entfernen: {ex.Message}");
+                    Log(Loc.LogRemoveError(ex.Message));
                 }
             }
         }
@@ -257,8 +253,8 @@ public sealed class SyncEngine : IDisposable
 
     private void OnWatcherError(object sender, ErrorEventArgs e)
     {
-        Log($"Watcher-Fehler: {e.GetException().Message}");
-        RaiseStatus("Fehler – versuche Neustart...");
+        Log(Loc.LogWatcherError(e.GetException().Message));
+        RaiseStatus(Loc.StatusErrorRestart);
 
         // Try to restart the watcher
         Task.Run(async () =>
@@ -267,12 +263,12 @@ public sealed class SyncEngine : IDisposable
             try
             {
                 SetupWatcher();
-                RaiseStatus("Aktiv – überwacht Clips...");
+                RaiseStatus(Loc.StatusActive);
             }
             catch (Exception ex)
             {
-                Log($"Neustart fehlgeschlagen: {ex.Message}");
-                RaiseStatus("Fehler – Watcher konnte nicht neu gestartet werden");
+                Log(Loc.LogRestartFailed(ex.Message));
+                RaiseStatus(Loc.StatusErrorFailed);
             }
         });
     }
@@ -288,7 +284,7 @@ public sealed class SyncEngine : IDisposable
 
             if (File.Exists(linkPath))
             {
-                Log($"Link existiert bereits: {linkName}");
+                Log(Loc.LogLinkExists(linkName));
                 return;
             }
 
@@ -296,11 +292,11 @@ public sealed class SyncEngine : IDisposable
             {
                 _syncedCount++;
                 RaiseSyncCount(_syncedCount);
-                Log($"Neuer Clip gesynct: {linkName}");
+                Log(Loc.LogNewClip(linkName));
             }
             else
             {
-                Log($"Fehler bei {linkName}: {error}");
+                Log(Loc.LogLinkError(linkName, error));
             }
         }
     }
