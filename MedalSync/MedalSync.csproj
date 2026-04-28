@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <AssemblyName>MedalSync</AssemblyName>
+    <RootNamespace>MedalSync</RootNamespace>
+    <Version>1.0.0</Version>
+    <Description>Syncs NVIDIA ShadowPlay clips to a flat folder for Medal</Description>
+  </PropertyGroup>
+
+</Project>
