@@ -87,6 +87,16 @@ public static class Loc
     public static string SettingsErrorDiffDrive => S(
         "Clips-Ordner und Sync-Ordner müssen auf dem selben Laufwerk liegen!\n\n(Hardlinks funktionieren nur auf dem gleichen NTFS-Volume)",
         "Clips folder and sync folder must be on the same drive!\n\n(Hardlinks only work on the same NTFS volume)");
+    public static string SettingsCustomSync => S(
+        "Benutzerdefinierten Sync-Ordner verwenden",
+        "Use custom sync folder");
+
+    // ── First Run ───────────────────────────────────────────────────────
+
+    public static string FirstRunTitle => S("MedalSync — Ersteinrichtung", "MedalSync — First Time Setup");
+    public static string FirstRunMessage => S(
+        "Willkommen bei MedalSync!\n\nBitte wähle im nächsten Schritt deinen NVIDIA ShadowPlay Clips-Ordner aus.",
+        "Welcome to MedalSync!\n\nIn the next step, please select your NVIDIA ShadowPlay clips folder.");
 
     // ── Other ───────────────────────────────────────────────────────────
 

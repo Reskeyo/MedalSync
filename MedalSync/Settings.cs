@@ -45,6 +45,16 @@ public sealed class Settings
     /// </summary>
     public string Language { get; set; } = "de";
 
+    /// <summary>
+    /// Whether this is the first time the app is running.
+    /// </summary>
+    public bool IsFirstRun { get; set; } = true;
+
+    /// <summary>
+    /// Whether the user has opted to use a custom sync folder.
+    /// </summary>
+    public bool CustomSyncFolder { get; set; } = false;
+
     // ── Persistence ─────────────────────────────────────────────────────
 
     public static Settings Load()

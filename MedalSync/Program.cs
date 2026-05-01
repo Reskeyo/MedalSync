@@ -14,8 +14,8 @@ static class Program
         if (!isNew)
         {
             // Load settings to get language for the error message
-            var settings = Settings.Load();
-            Loc.SetLanguage(settings.Language);
+            var currentSettings = Settings.Load();
+            Loc.SetLanguage(currentSettings.Language);
 
             MessageBox.Show(
                 Loc.AlreadyRunning,
@@ -26,6 +26,31 @@ static class Program
         }
 
         ApplicationConfiguration.Initialize();
-        Application.Run(new TrayApplication());
+
+        var settings = Settings.Load();
+        Loc.SetLanguage(settings.Language);
+
+        if (settings.IsFirstRun)
+        {
+            MessageBox.Show(
+                Loc.FirstRunMessage,
+                Loc.FirstRunTitle,
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+
+            using var dialog = new SettingsDialog(settings);
+            if (dialog.ShowDialog() == DialogResult.OK)
+            {
+                settings.IsFirstRun = false;
+                settings.Save();
+            }
+            else
+            {
+                // User cancelled first run setup
+                return;
+            }
+        }
+
+        Application.Run(new TrayApplication(settings));
     }
 }

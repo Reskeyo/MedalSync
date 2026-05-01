@@ -1,4 +1,4 @@
-﻿using Microsoft.Win32;
+using Microsoft.Win32;
 
 namespace MedalSync;
 
@@ -24,9 +24,12 @@ public sealed class TrayApplication : ApplicationContext
     private const string AutoStartRegistryKey = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Run";
     private const string AppName = "MedalSync";
 
-    public TrayApplication()
+    public TrayApplication(Settings settings)
     {
-        _settings = Settings.Load();
+        _settings = settings;
+        _settings.AutoStart = CheckAutoStart();
+        _settings.Save();
+
         Loc.SetLanguage(_settings.Language);
 
         _engine = new SyncEngine(_settings);
@@ -252,11 +255,24 @@ public sealed class TrayApplication : ApplicationContext
         }
         catch
         {
-            // Registry access might fail â€” silently ignore
+            // Registry access might fail — silently ignore
         }
     }
 
-    // â”€â”€ Icon Generation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    private static bool CheckAutoStart()
+    {
+        try
+        {
+            using var key = Registry.CurrentUser.OpenSubKey(AutoStartRegistryKey, false);
+            if (key == null) return false;
+
+            var value = key.GetValue(AppName) as string;
+            return !string.IsNullOrEmpty(value);
+        }
+        catch { return false; }
+    }
+
+    // ── Icon Generation ─────────────────────────────────────────────────
 
     /// <summary>
     /// Creates a simple sync-style icon programmatically.
