@@ -15,7 +15,7 @@ Medal removed their built-in NVIDIA ShadowPlay sync option, and their suggested 
 ## 🎯 The Problem
 
 NVIDIA ShadowPlay saves clips in **subfolders per game**:
-```
+```text
 D:\Clips\
 ├── Fortnite\
 │   ├── clip1.mp4
@@ -26,13 +26,13 @@ D:\Clips\
     └── clutch.mp4
 ```
 
-Medal can only read clips from a **flat folder** (no subfolders). So none of your clips show up.
+Medal can only read clips from a **flat folder** (no subfolders). So none of your clips show up if you just add `D:\Clips` to Medal.
 
 ## ✅ The Solution
 
-MedalSync watches your NVIDIA clips folder and creates **hardlinks** in a flat sync folder that Medal can read:
+MedalSync watches your NVIDIA clips folder and automatically creates **hardlinks** in a separate, flat sync folder that Medal can easily read:
 
-```
+```text
 D:\MedalSync\
 ├── Fortnite_clip1.mp4          → D:\Clips\Fortnite\clip1.mp4
 ├── Fortnite_clip2.mp4          → D:\Clips\Fortnite\clip2.mp4
@@ -40,77 +40,87 @@ D:\MedalSync\
 └── Rainbow Six Siege_clutch.mp4 → D:\Clips\Rainbow Six Siege\clutch.mp4
 ```
 
-- **Zero extra disk space** — hardlinks point to the same data on disk
-- **Zero CPU usage** when idle — uses OS-level file system notifications
-- **Real-time sync** — new clips appear instantly
-- **No admin rights required** — hardlinks don't need elevated privileges
-- **Runs silently** in the system tray
+- **Zero extra disk space** — hardlinks point to the same data on disk.
+- **Zero CPU usage** when idle — uses OS-level file system notifications.
+- **Real-time sync** — new clips appear instantly.
+- **No admin rights required** — hardlinks don't need elevated privileges.
+- **Runs silently** in the system tray.
 
 ---
 
 ## 📥 Download
 
-Go to [**Releases**](../../releases/latest) and download `MedalSync-v1.0.0-win-x64.zip`.
+Go to [**Releases**](../../releases/latest) and download `MedalSync-v1.2.0-win-x64.zip`.
 
-> **Note:** The `.exe` is self-contained — no .NET installation required!
+> **Note:** The `.exe` is self-contained — no .NET installation is required!
 
 ---
 
-## 🚀 Quick Setup
+## 🚀 Quick Setup Guide
 
 ### 1. Start MedalSync
-Run `MedalSync.exe`. A gold **M** icon appears in your system tray.
+Run `MedalSync.exe`. 
+On your first startup, a prompt will appear asking you to configure your folders. Afterwards, a gold **M** icon will appear in your system tray (bottom right corner of your screen).
 
-### 2. Configure Folders
-Right-click the tray icon → **⚙ Einstellungen** (Settings):
-- **NVIDIA Clips-Ordner**: Your ShadowPlay clips folder (e.g. `D:\Clips`)
-- **Medal Sync-Ordner**: Where hardlinks will be created (e.g. `D:\MedalSync`)
+### 2. Configure Your Folders
+In the setup window:
+1. Select your **NVIDIA Clips Folder** (e.g. `D:\Videos\Clips`). This is where GeForce Experience/ShadowPlay saves your recordings.
+2. By default, MedalSync will automatically create a `MedalSync` folder right next to your NVIDIA clips folder (e.g., `D:\Videos\MedalSync`).
+3. *(Optional)* If you want a custom sync folder location, check **Use custom sync folder** and select your desired path.
+4. Click **Save**.
 
-> ⚠️ Both folders must be on the **same drive** (hardlink requirement).
+> ⚠️ **Important:** Both the NVIDIA clips folder and the Medal sync folder must be on the **same drive** (this is a hard requirement for Windows hardlinks).
 
-### 3. Add Sync Folder to Medal
-In Medal: Go to **Settings** → Add `D:\MedalSync` as an additional clips folder.
+### 3. Add the Sync Folder to Medal
+Now you need to tell Medal to read the clips from the newly created sync folder.
+1. Open the **Medal** app.
+2. Go to **Settings** (gear icon) → **Recorder** (or **Clips & Recording** depending on your version).
+3. Scroll down to **Capture Folder Location** or **Additional Clips Folders**.
+4. Click **Add Folder** and select the **Medal Sync Folder** you created in Step 2 (e.g. `D:\Videos\MedalSync`).
 
 ### 4. Done! 🎉
-All your existing clips are synced immediately, and new ones sync in real-time.
+All your existing clips are synced immediately, and new ones will sync in real-time. You can now see and upload all your ShadowPlay clips directly from Medal.
 
 ---
 
 ## 🖱️ Tray Menu
 
+Right-click the gold **M** icon in your system tray to access the menu:
+
 | Option | Description |
 |--------|-------------|
-| ⏸ Pausieren / ▶ Fortsetzen | Pause or resume file watching |
-| 🔄 Neu synchronisieren | Force a full resync |
-| 📂 Sync-Ordner öffnen | Open the Medal sync folder |
-| 📂 Clips-Ordner öffnen | Open the NVIDIA clips folder |
-| ⚙ Einstellungen | Change source/sync folder paths |
-| Autostart mit Windows | Toggle automatic startup |
-| ❌ Beenden | Exit MedalSync |
+| ⏸ Pause / ▶ Resume | Pause or resume file watching |
+| 🔄 Resync | Force a full resync of all clips |
+| 📂 Open sync folder | Open the flat Medal sync folder in Explorer |
+| 📂 Open clips folder | Open your NVIDIA clips folder in Explorer |
+| ⚙ Settings | Change your source/sync folder paths |
+| ☑ Start with Windows | Toggle automatic startup when your PC boots |
+| 🌐 Language | Switch the app language between English and Deutsch |
+| ❌ Exit | Close MedalSync |
 
-**Double-click** the tray icon to open the sync folder.
+**Double-click** the tray icon to quickly open the sync folder.
 
 ---
 
 ## ❓ FAQ
 
 ### How does it work?
-MedalSync uses **NTFS hard links** — a second directory entry pointing to the exact same file data. This means:
-- No extra disk space used
-- Deleting the hardlink does NOT delete your original clip
-- Deleting the original does NOT affect the hardlink (data persists until all links are removed)
+MedalSync uses **NTFS hard links** — a second directory entry pointing to the exact same file data on your hard drive. This means:
+- No extra disk space is used.
+- Deleting the hardlink from the sync folder does NOT delete your original clip.
+- Deleting the original clip does NOT affect the hardlink (the data persists until all links are removed).
 
-### Does it use resources?
-Virtually none. It uses Windows' built-in `FileSystemWatcher` (`ReadDirectoryChangesW`) which is an OS-level notification — **0% CPU when idle**. It only wakes up when a new clip is saved.
+### Does it use my PC's resources?
+Virtually none. It uses Windows' built-in `FileSystemWatcher` (`ReadDirectoryChangesW`) which is an OS-level notification — **0% CPU when idle**. It only wakes up for a split second when a new clip is saved.
 
 ### What about files with the same name?
-Clips are prefixed with their game folder name: `Fortnite_clip1.mp4`, `Valorant_clip2.mp4`, etc. This prevents naming conflicts.
+Clips are automatically prefixed with their game folder name (e.g. `Fortnite_clip1.mp4`, `Valorant_clip2.mp4`). This completely prevents naming conflicts when combining them into a single folder.
 
-### Can I use different drives?
-Source and sync folder must be on the **same NTFS drive**. Hard links are a filesystem feature that only works within the same volume. The settings dialog will warn you if you try to use different drives.
+### Can I use different drives for my clips and the sync folder?
+No. The source and sync folder must be on the **same NTFS drive**. Hard links are a filesystem feature that only works within the same volume. The settings dialog will warn you if you try to use different drives.
 
 ### Is it safe?
-Yes. MedalSync never modifies or moves your original clips. It only creates additional directory entries (hardlinks) in the sync folder.
+Yes. MedalSync never modifies or moves your original clips. It only creates additional directory entries (hardlinks) in the sync folder and automatically removes them if the original file is deleted.
 
 ---
 
@@ -118,7 +128,7 @@ Yes. MedalSync never modifies or moves your original clips. It only creates addi
 
 ```bash
 # Clone
-git clone https://github.com/YOUR_USERNAME/MedalSync.git
+git clone https://github.com/Reskeyo/MedalSync.git
 cd MedalSync
 
 # Build
