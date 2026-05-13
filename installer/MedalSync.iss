@@ -17,7 +17,6 @@ DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
 OutputDir=..\dist
 OutputBaseFilename=MedalSync-Setup
-SetupIconFile={#MyAppSourceDir}\{#MyAppExeName}
 UninstallDisplayIcon={app}\{#MyAppExeName}
 ArchitecturesInstallIn64BitMode=x64
 PrivilegesRequired=lowest
@@ -37,7 +36,7 @@ Name: "runapp"; Description: "Start MedalSync after setup"; Flags: checkedonce
 Source: "{#MyAppSourceDir}\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion
 
 [Registry]
-Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "MedalSync"; ValueData: "\"{app}\{#MyAppExeName}\""; Tasks: autorun; Flags: uninsdeletevalue
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "MedalSync"; ValueData: """{app}\{#MyAppExeName}"""; Tasks: autorun; Flags: uninsdeletevalue
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "Start MedalSync"; Tasks: runapp; Flags: nowait postinstall skipifsilent

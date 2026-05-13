@@ -84,9 +84,9 @@ public sealed class Settings
             if (File.Exists(LegacySettingsPath))
             {
                 string json = File.ReadAllText(LegacySettingsPath);
-                var settings = JsonSerializer.Deserialize<Settings>(json, JsonOptions) ?? new Settings();
-                settings.Save();
-                return settings;
+                var loadedSettings = JsonSerializer.Deserialize<Settings>(json, JsonOptions) ?? new Settings();
+                loadedSettings.Save();
+                return loadedSettings;
             }
         }
         catch
