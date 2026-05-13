@@ -11,10 +11,12 @@ public sealed class SyncEngine : IDisposable
 {
     private readonly Settings _settings;
     private FileSystemWatcher? _watcher;
+    private FileSystemWatcher? _syncWatcher;
     private bool _isPaused;
     private int _syncedCount;
     private readonly object _lock = new();
     private readonly SynchronizationContext? _syncContext;
+    private readonly Dictionary<string, string> _linkMap = new(StringComparer.OrdinalIgnoreCase);
 
     // ── Events ──────────────────────────────────────────────────────────
 
@@ -55,6 +57,7 @@ public sealed class SyncEngine : IDisposable
 
         // Start watching for new files
         SetupWatcher();
+        SetupSyncWatcher();
 
         RaiseStatus(Loc.StatusActive);
     }
@@ -63,6 +66,8 @@ public sealed class SyncEngine : IDisposable
     {
         _watcher?.Dispose();
         _watcher = null;
+        _syncWatcher?.Dispose();
+        _syncWatcher = null;
         RaiseStatus(Loc.StatusStopped);
     }
 
@@ -74,6 +79,9 @@ public sealed class SyncEngine : IDisposable
             _isPaused = true;
             RaiseStatus(Loc.StatusPaused);
         }
+
+        if (_syncWatcher != null)
+            _syncWatcher.EnableRaisingEvents = false;
     }
 
     public void Resume()
@@ -84,6 +92,9 @@ public sealed class SyncEngine : IDisposable
             _isPaused = false;
             RaiseStatus(Loc.StatusActive);
         }
+
+        if (_syncWatcher != null)
+            _syncWatcher.EnableRaisingEvents = true;
     }
 
     /// <summary>
@@ -99,6 +110,7 @@ public sealed class SyncEngine : IDisposable
     public void Dispose()
     {
         _watcher?.Dispose();
+        _syncWatcher?.Dispose();
     }
 
     // ── Initial Sync ────────────────────────────────────────────────────
@@ -111,8 +123,13 @@ public sealed class SyncEngine : IDisposable
         int skipped = 0;
         int cleaned = 0;
 
+        bool syncWatcherWasEnabled = _syncWatcher?.EnableRaisingEvents ?? false;
+        if (_syncWatcher != null)
+            _syncWatcher.EnableRaisingEvents = false;
+
         // Collect all valid source clips
         var sourceClips = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var linkMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         foreach (string ext in _settings.Extensions)
         {
@@ -123,6 +140,7 @@ public sealed class SyncEngine : IDisposable
                 string linkName = GetSyncFileName(file);
                 string linkPath = Path.Combine(_settings.SyncFolder, linkName);
                 sourceClips.Add(linkName);
+                linkMap[linkName] = file;
 
                 if (File.Exists(linkPath))
                 {
@@ -161,8 +179,19 @@ public sealed class SyncEngine : IDisposable
             }
         }
 
-        _syncedCount = sourceClips.Count;
+        lock (_lock)
+        {
+            _linkMap.Clear();
+            foreach (var pair in linkMap)
+                _linkMap[pair.Key] = pair.Value;
+
+            _syncedCount = _linkMap.Count;
+        }
+
         RaiseSyncCount(_syncedCount);
+
+        if (_syncWatcher != null)
+            _syncWatcher.EnableRaisingEvents = syncWatcherWasEnabled;
 
         Log(Loc.LogSyncComplete(created, skipped, cleaned));
     }
@@ -192,6 +221,22 @@ public sealed class SyncEngine : IDisposable
         _watcher.Error += OnWatcherError;
     }
 
+    private void SetupSyncWatcher()
+    {
+        _syncWatcher?.Dispose();
+
+        _syncWatcher = new FileSystemWatcher(_settings.SyncFolder)
+        {
+            IncludeSubdirectories = false,
+            NotifyFilter = NotifyFilters.FileName,
+            EnableRaisingEvents = true,
+            Filter = "*.*"
+        };
+
+        _syncWatcher.Deleted += OnSyncFileDeleted;
+        _syncWatcher.Error += OnSyncWatcherError;
+    }
+
     private void OnFileCreated(object sender, FileSystemEventArgs e)
     {
         if (!IsWatchedExtension(e.FullPath)) return;
@@ -211,6 +256,8 @@ public sealed class SyncEngine : IDisposable
         string linkName = GetSyncFileName(e.FullPath);
         string linkPath = Path.Combine(_settings.SyncFolder, linkName);
 
+        RemoveLinkMapping(linkName);
+
         lock (_lock)
         {
             if (File.Exists(linkPath))
@@ -218,8 +265,6 @@ public sealed class SyncEngine : IDisposable
                 try
                 {
                     File.Delete(linkPath);
-                    _syncedCount = Math.Max(0, _syncedCount - 1);
-                    RaiseSyncCount(_syncedCount);
                     Log(Loc.LogLinkRemoved(linkName));
                 }
                 catch (Exception ex)
@@ -237,6 +282,7 @@ public sealed class SyncEngine : IDisposable
         {
             string oldLinkName = GetSyncFileName(e.OldFullPath);
             string oldLinkPath = Path.Combine(_settings.SyncFolder, oldLinkName);
+            RemoveLinkMapping(oldLinkName);
             try { File.Delete(oldLinkPath); } catch { }
         }
 
@@ -273,6 +319,42 @@ public sealed class SyncEngine : IDisposable
         });
     }
 
+    private void OnSyncWatcherError(object sender, ErrorEventArgs e)
+    {
+        Log(Loc.LogWatcherError(e.GetException().Message));
+    }
+
+    private void OnSyncFileDeleted(object sender, FileSystemEventArgs e)
+    {
+        if (!IsWatchedExtension(e.FullPath)) return;
+
+        string linkName = Path.GetFileName(e.FullPath);
+        if (string.IsNullOrEmpty(linkName)) return;
+
+        string? sourcePath = null;
+        if (!TryRemoveLinkMapping(linkName, out sourcePath))
+            return;
+
+        if (string.IsNullOrEmpty(sourcePath) || !File.Exists(sourcePath))
+            sourcePath = FindSourcePathForLink(linkName);
+
+        if (string.IsNullOrEmpty(sourcePath) || !File.Exists(sourcePath))
+        {
+            Log(Loc.LogSyncDeleteMissingSource(linkName));
+            return;
+        }
+
+        try
+        {
+            File.Delete(sourcePath);
+            Log(Loc.LogSyncDeleteSourceRemoved(linkName));
+        }
+        catch (Exception ex)
+        {
+            Log(Loc.LogSyncDeleteSourceError(linkName, ex.Message));
+        }
+    }
+
     // ── Helpers ─────────────────────────────────────────────────────────
 
     private void ProcessNewFile(string filePath)
@@ -284,14 +366,14 @@ public sealed class SyncEngine : IDisposable
 
             if (File.Exists(linkPath))
             {
+                AddLinkMapping(linkName, filePath, updateCount: true);
                 Log(Loc.LogLinkExists(linkName));
                 return;
             }
 
             if (NativeHelper.TryCreateHardLink(linkPath, filePath, out string? error))
             {
-                _syncedCount++;
-                RaiseSyncCount(_syncedCount);
+                AddLinkMapping(linkName, filePath, updateCount: true);
                 Log(Loc.LogNewClip(linkName));
             }
             else
@@ -329,6 +411,84 @@ public sealed class SyncEngine : IDisposable
         string ext = Path.GetExtension(filePath);
         return _settings.Extensions.Any(e =>
             string.Equals(e, ext, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private void AddLinkMapping(string linkName, string sourcePath, bool updateCount)
+    {
+        bool added = false;
+        int newCount = 0;
+
+        if (!_linkMap.ContainsKey(linkName))
+        {
+            _linkMap[linkName] = sourcePath;
+            added = true;
+        }
+        else
+        {
+            _linkMap[linkName] = sourcePath;
+        }
+
+        if (updateCount && added)
+        {
+            _syncedCount = _linkMap.Count;
+            newCount = _syncedCount;
+        }
+
+        if (updateCount && added)
+            RaiseSyncCount(newCount);
+    }
+
+    private void RemoveLinkMapping(string linkName)
+    {
+        if (TryRemoveLinkMapping(linkName, out _))
+        {
+            // Mapping removal already handled count update.
+        }
+    }
+
+    private bool TryRemoveLinkMapping(string linkName, out string? sourcePath)
+    {
+        bool removed = false;
+        int newCount = 0;
+
+        lock (_lock)
+        {
+            removed = _linkMap.TryGetValue(linkName, out sourcePath);
+            if (removed)
+            {
+                _linkMap.Remove(linkName);
+                _syncedCount = _linkMap.Count;
+                newCount = _syncedCount;
+            }
+        }
+
+        if (removed)
+            RaiseSyncCount(newCount);
+
+        return removed;
+    }
+
+    private string? FindSourcePathForLink(string linkName)
+    {
+        string? match = null;
+
+        foreach (string ext in _settings.Extensions)
+        {
+            foreach (string file in Directory.EnumerateFiles(
+                _settings.SourceFolder, $"*{ext}", SearchOption.AllDirectories))
+            {
+                string candidateName = GetSyncFileName(file);
+                if (!string.Equals(candidateName, linkName, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                if (match != null)
+                    return null; // Ambiguous match
+
+                match = file;
+            }
+        }
+
+        return match;
     }
 
     /// <summary>

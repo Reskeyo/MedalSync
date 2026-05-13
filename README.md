@@ -50,7 +50,7 @@ D:\MedalSync\
 
 ## 📥 Download
 
-Go to [**Releases**](../../releases/latest) and download `MedalSync-v1.2.0-win-x64.zip`.
+Go to [**Releases**](../../releases/latest) and download `MedalSync-Setup.exe`.
 
 > **Note:** The `.exe` is self-contained — no .NET installation is required!
 
@@ -107,8 +107,8 @@ Right-click the gold **M** icon in your system tray to access the menu:
 ### How does it work?
 MedalSync uses **NTFS hard links** — a second directory entry pointing to the exact same file data on your hard drive. This means:
 - No extra disk space is used.
-- Deleting the hardlink from the sync folder does NOT delete your original clip.
-- Deleting the original clip does NOT affect the hardlink (the data persists until all links are removed).
+- If you delete a clip from the sync folder (e.g., in Medal), MedalSync will also delete the original clip.
+- If you delete the original clip, MedalSync removes the sync link.
 
 ### Does it use my PC's resources?
 Virtually none. It uses Windows' built-in `FileSystemWatcher` (`ReadDirectoryChangesW`) which is an OS-level notification — **0% CPU when idle**. It only wakes up for a split second when a new clip is saved.
@@ -120,7 +120,7 @@ Clips are automatically prefixed with their game folder name (e.g. `Fortnite_cli
 No. The source and sync folder must be on the **same NTFS drive**. Hard links are a filesystem feature that only works within the same volume. The settings dialog will warn you if you try to use different drives.
 
 ### Is it safe?
-Yes. MedalSync never modifies or moves your original clips. It only creates additional directory entries (hardlinks) in the sync folder and automatically removes them if the original file is deleted.
+Yes. MedalSync only creates hardlinks in the sync folder and removes them when the original file is deleted. If you delete a clip from the sync folder, MedalSync will delete the original clip as well.
 
 ---
 
@@ -139,6 +139,18 @@ dotnet publish MedalSync/MedalSync.csproj -c Release -r win-x64 --self-contained
 ```
 
 Requires [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) or later.
+
+### 📦 Installer (Inno Setup)
+Build a simple installer that runs the app after setup and can optionally add autostart:
+
+```bash
+# Install Inno Setup, then run:
+iscc installer\MedalSync.iss
+```
+
+The installer will be written to `dist\MedalSync-Setup.exe`.
+
+> **Note:** Without a code-signing certificate, Windows SmartScreen may still show a warning.
 
 ---
 

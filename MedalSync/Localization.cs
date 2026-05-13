@@ -62,6 +62,15 @@ public static class Loc
     public static string LogNewClip(string name) => S($"Neuer Clip gesynct: {name}", $"New clip synced: {name}");
     public static string LogLinkRemoved(string name) => S($"Link entfernt: {name}", $"Link removed: {name}");
     public static string LogRemoveError(string msg) => S($"Fehler beim Entfernen: {msg}", $"Error removing: {msg}");
+    public static string LogSyncDeleteSourceRemoved(string name) => S(
+        $"Sync-Link gelöscht, Original entfernt: {name}",
+        $"Sync link deleted, source removed: {name}");
+    public static string LogSyncDeleteSourceError(string name, string msg) => S(
+        $"Original konnte nicht gelöscht werden ({name}): {msg}",
+        $"Failed to delete source ({name}): {msg}");
+    public static string LogSyncDeleteMissingSource(string name) => S(
+        $"Original nicht gefunden für gelöschten Sync-Link: {name}",
+        $"Source not found for deleted sync link: {name}");
     public static string LogWatcherError(string msg) => S($"Watcher-Fehler: {msg}", $"Watcher error: {msg}");
     public static string LogRestartFailed(string msg) => S($"Neustart fehlgeschlagen: {msg}", $"Restart failed: {msg}");
 
@@ -103,4 +112,17 @@ public static class Loc
     public static string AlreadyRunning => S(
         "MedalSync läuft bereits im System Tray!",
         "MedalSync is already running in the system tray!");
+
+    // ── Updates ───────────────────────────────────────────────────────
+
+    public static string UpdateTitle => S("MedalSync — Update", "MedalSync — Update");
+    public static string UpdateAvailable(string version) => S(
+        $"Ein Update auf Version {version} ist verfügbar. Jetzt installieren?",
+        $"An update to version {version} is available. Install now?");
+    public static string UpdateDownloadFailed(string message) => S(
+        $"Update konnte nicht heruntergeladen werden:\n{message}",
+        $"Failed to download update:\n{message}");
+    public static string UpdateLaunchFailed(string message) => S(
+        $"Installer konnte nicht gestartet werden:\n{message}",
+        $"Failed to launch installer:\n{message}");
 }

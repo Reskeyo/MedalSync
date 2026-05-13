@@ -8,7 +8,11 @@ namespace MedalSync;
 /// </summary>
 public sealed class Settings
 {
-    private static readonly string SettingsPath =
+    private static readonly string SettingsDir = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "MedalSync");
+    private static readonly string SettingsPath = Path.Combine(SettingsDir, "settings.json");
+    private static readonly string LegacySettingsPath =
         Path.Combine(AppContext.BaseDirectory, "settings.json");
 
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -55,6 +59,16 @@ public sealed class Settings
     /// </summary>
     public bool CustomSyncFolder { get; set; } = false;
 
+    /// <summary>
+    /// Whether automatic update checks are enabled.
+    /// </summary>
+    public bool AutoUpdateEnabled { get; set; } = true;
+
+    /// <summary>
+    /// Last successful update check time (UTC).
+    /// </summary>
+    public DateTime LastUpdateCheckUtc { get; set; } = DateTime.MinValue;
+
     // ── Persistence ─────────────────────────────────────────────────────
 
     public static Settings Load()
@@ -65,6 +79,14 @@ public sealed class Settings
             {
                 string json = File.ReadAllText(SettingsPath);
                 return JsonSerializer.Deserialize<Settings>(json, JsonOptions) ?? new Settings();
+            }
+
+            if (File.Exists(LegacySettingsPath))
+            {
+                string json = File.ReadAllText(LegacySettingsPath);
+                var settings = JsonSerializer.Deserialize<Settings>(json, JsonOptions) ?? new Settings();
+                settings.Save();
+                return settings;
             }
         }
         catch
@@ -81,6 +103,7 @@ public sealed class Settings
     {
         try
         {
+            Directory.CreateDirectory(SettingsDir);
             string json = JsonSerializer.Serialize(this, JsonOptions);
             File.WriteAllText(SettingsPath, json);
         }

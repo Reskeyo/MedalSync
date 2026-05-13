@@ -11,6 +11,7 @@ public sealed class TrayApplication : ApplicationContext
     private readonly NotifyIcon _trayIcon;
     private readonly SyncEngine _engine;
     private readonly Settings _settings;
+    private readonly SynchronizationContext? _syncContext;
     private ContextMenuStrip _menu = null!;
 
     // Menu items that need dynamic updates
@@ -27,6 +28,7 @@ public sealed class TrayApplication : ApplicationContext
     public TrayApplication(Settings settings)
     {
         _settings = settings;
+        _syncContext = SynchronizationContext.Current;
         _settings.AutoStart = CheckAutoStart();
         _settings.Save();
 
@@ -63,6 +65,8 @@ public sealed class TrayApplication : ApplicationContext
         // â”€â”€ Start engine â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
         _engine.Start();
+
+        StartUpdateCheck();
     }
 
     // â”€â”€ Menu Building â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -232,6 +236,74 @@ public sealed class TrayApplication : ApplicationContext
         _trayIcon.Visible = false;
         _trayIcon.Dispose();
         Application.Exit();
+    }
+
+    private void StartUpdateCheck()
+    {
+        Task.Run(async () =>
+        {
+            try
+            {
+                var update = await UpdateService.CheckForUpdateAsync(_settings);
+                if (update == null)
+                    return;
+
+                RunOnUiThread(() => PromptUpdate(update));
+            }
+            catch
+            {
+                // Best effort only for background updates.
+            }
+        });
+    }
+
+    private void PromptUpdate(UpdateInfo update)
+    {
+        var result = MessageBox.Show(
+            Loc.UpdateAvailable(update.Version.ToString()),
+            Loc.UpdateTitle,
+            MessageBoxButtons.YesNo,
+            MessageBoxIcon.Information);
+
+        if (result != DialogResult.Yes)
+            return;
+
+        Task.Run(async () =>
+        {
+            try
+            {
+                var installerPath = await UpdateService.DownloadUpdateAsync(update);
+                try
+                {
+                    UpdateService.RunInstaller(installerPath);
+                    RunOnUiThread(Application.Exit);
+                }
+                catch (Exception ex)
+                {
+                    RunOnUiThread(() => MessageBox.Show(
+                        Loc.UpdateLaunchFailed(ex.Message),
+                        Loc.UpdateTitle,
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Warning));
+                }
+            }
+            catch (Exception ex)
+            {
+                RunOnUiThread(() => MessageBox.Show(
+                    Loc.UpdateDownloadFailed(ex.Message),
+                    Loc.UpdateTitle,
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning));
+            }
+        });
+    }
+
+    private void RunOnUiThread(Action action)
+    {
+        if (_syncContext != null)
+            _syncContext.Post(_ => action(), null);
+        else
+            action();
     }
 
     // â”€â”€ Auto-Start Management â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
